@@ -1,1 +1,2 @@
-
+### ¿Qué es este proyecto?
+Es una API REST muy simple hecha con Express (Node + TypeScript) que maneja en memoria una “colección” de discos (tipo LaserDisc) con campos como `filmName`, `rotationType`, etc. Expone endpoints CRUD: crear, leer, actualizar y eliminar. Además, incluye una función `testApi()` que se auto-llama cuando arranca el servidor y prueba la API (GET → POST → GET → PUT → DELETE → GET) usando axios.
