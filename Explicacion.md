@@ -18,6 +18,16 @@ app.use(express.json());
 - `express.json()` añade un middleware que parsea JSON en `req.body`.
 - `app` corazon del servidor, objeto sobre el que configuro todas las rutas, middlewares y lógica de la API. Tiene métodos para definir como se comporta el servidor.
 
+### 1.1) `app.use(...)` — registrar middlewares
+### ¿Qué es un middleware?
+Es una función que se ejecuta antes de que tu ruta (GET/POST/…) procese la petición. Sirve para:
+- Leer o transformar la petición (`req`)
+- Añadir datos a `req` (`req.body`, `req.user`, etc.)
+- Cortar la petición devolviendo ya una respuesta (`res`)
+- O dejar pasar la petición a lo siguiente con `next()`
+
+**Orden importa**: se ejecutan en el orden en que los declaras.
+
 ## 2) Modelo de datos con TypeScript
 ```ts
 type LD = {
@@ -75,7 +85,7 @@ app.get("/ld/:id", (req, res) => {
 - `:id` es un parámetro de ruta (string). Lo conviertes a número con `Number`.
 - `Array.find` busca el elemento por `id`.
 - Respondes 200 con el objeto o 404 si no existe.
-- 
+  
 ### Códigos de estado HTTP
 Cada vez que un servidor responde a una petición (GET, POST, PUT, DELETE…), **no solo envía datos**, también envía un **número llamado “status code”**.
 Ese número le dice al cliente (el navegador, Postman, o `axios`) si la petición fue correcta o si hubo un error, y de qué tipo.
@@ -102,21 +112,136 @@ Ese número le dice al cliente (el navegador, Postman, o `axios`) si la petició
 > - Los que comienzan con **4xx** indican *error del cliente*.  
 > - Los que comienzan con **5xx** indican *error del servidor*.
 
+## 7) POST /ld (crear) -> añadir al array "base de datos"
+```ts
+`app.post("/ld", (req, res) => {
+  const lastID = ld.at(-1)?.id;
+  const newID = lastID ? lastID + 1 : 0;
 
+  const newfilmName = req.body.filmName;
+  const newrotationType = req.body.rotationType;
+  const newregion = req.body.region;
+  const newlengthMinutes = req.body.lengthMinutes;
+  const newvideoFormat = req.body.videoFormat;
 
+  const newdisco: LD = {
+    id: newID,
+    filmName: newfilmName,
+    rotationType: newrotationType,
+    region: newregion,
+    lengthMinutes: newlengthMinutes,
+    videoFormat: newvideoFormat
+  };
 
+  if (
+    newfilmName &&
+    newrotationType &&
+    typeof newfilmName === "string" &&
+    typeof newrotationType === "string" &&
+    typeof newregion === "string" &&
+    typeof newlengthMinutes === "number" &&
+    typeof newvideoFormat === "string"
+  ) {
+    ld.push(newdisco);
+    res.status(201).json(newdisco);
+  } else {
+    res.status(400).send("Solicitud incorrecta para la creación");
+  }
+});
+```
+- `ld.at(-1)` toma el último elemento del array (si existe). `?.` evita fallo si el array está vacío.
+- Calculas `newID` como último `id + 1`, o `0` si no hay datos.
+- Tomas el payload de `req.body` (gracias al middleware `express.json()`).
+- Haces **validaciones básicas de tipos** y, si todo bien:
+  - Insertas en el array.
+  - Respondes `201 Created` con el nuevo objeto.
+- Si falla, devuelves `400 Bad Request`.
 
+## 8) PUT /ld/:id (actualizar)
+```ts
+app.put("/ld/:id", (req, res) => {
+  const id = Number(req.params.id);
+  ld = ld.map((elem) =>
+    id == elem.id ? { ...elem, ...req.body } : elem
+  );
+  res.status(202).send("Disco modificado");
+});
+```
+- Convierte `id` a número.
+- Usa `Array.map` para reemplazar inmutablemente el elemento cuyo `id` coincide:
+  - `{ ...elem, ...req.body }` es el spread operator para “mergear”.
+- Responde `202 Accepted`.
 
+## 9) DELETE /ld/:id (eliminar)
+```ts
+app.delete("/ld/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const discoExiste = ld.some((elem) => elem.id === id);
 
+  if (!discoExiste) {
+    return res.status(404).json({ message: "Error 404. Disco no encontrado" });
+  }
 
+  ld = ld.filter((elem) => elem.id !== id);
+  res.status(200).json({ message: "Disco eliminado correctamente" });
+});
+```
+- Comprueba primero si existe (`some`), responde 404 si no.
+- Si existe, filtra el array quitando el `id` y devuelve 200.
 
+## 10) `testApi()` – prueba automática de la API
+```ts
+async function testApi() {
+  const baseURL = "http://localhost:3000";
 
+  try {
+    const respuestaGet = await axios.get(`${baseURL}/ld`);
+    console.log("Discos iniciales:", respuestaGet.data);
 
+    const respuestaPost = await axios.post(`${baseURL}/ld`, {
+      filmName: "EJEMPLO3",
+      rotationType: "CAV",
+      region: "REGION3",
+      lengthMinutes: 30,
+      videoFormat: "NTSC"
+    });
+    console.log("Nuevo disco creado:", respuestaPost.data);
 
+    const respuestaGet2 = await axios.get(`${baseURL}/ld`);
+    console.log("Discos después del POST:", respuestaGet2.data);
 
+    await axios.put(`${baseURL}/ld/${respuestaPost.data.id}`, {
+      rotationType: "CLV",
+      lengthMinutes: 40,
+      videoFormat: "PAL"
+    });
+    console.log(`Disco con id ${respuestaPost.data.id} modificado.`);
 
+    await axios.delete(`${baseURL}/ld/${respuestaPost.data.id}`);
+    console.log(`Disco con id ${respuestaPost.data.id} eliminado.`);
 
+    const respuestaGetFinal = await axios.get(`${baseURL}/ld`);
+    console.log("Discos finales:", respuestaGetFinal.data);
 
+  } catch (error) {
+    console.log("Error en testApi:", error);
+  }
+}
+```
+- Usa **axios** para llamar a tu propia API y va loggeando el estado en cada paso.
+- Flujo: GET inicial → POST uno nuevo → GET → PUT al recién creado → DELETE ese mismo → GET final.
+
+## 11) Arranque del servidor y llamada a `testApi`
+```ts
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Servidor en http://localhost:${port}`);
+  setTimeout(() => {
+    testApi();
+  }, 1000);
+});
+```
+- Escucha en `0.0.0.0:3000`. -> `"0.0.0.0"` indica que aceptará conexiones desde cualquier IP local (útil si pruebas en una red local).
+- Tras 1 segundo de gracia, ejecuta `testApi()` para probar todo.
 
 
 
