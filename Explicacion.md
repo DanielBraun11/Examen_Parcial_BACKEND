@@ -114,40 +114,54 @@ Ese número le dice al cliente (el navegador, Postman, o `axios`) si la petició
 
 ## 7) POST /ld (crear) -> añadir al array "base de datos"
 ```ts
-`app.post("/ld", (req, res) => {
+// Ruta POST que recibe peticiones en "/ld" para crear un nuevo disco
+app.post("/ld", (req, res) => {
+
+  // Obtiene el id del último elemento del array 'ld' (si existe)
   const lastID = ld.at(-1)?.id;
+
+  // Calcula el nuevo id: si hay uno previo, suma 1; si no hay, empieza en 0
   const newID = lastID ? lastID + 1 : 0;
 
+  // Extrae los datos enviados en el cuerpo (body) de la petición HTTP
   const newfilmName = req.body.filmName;
   const newrotationType = req.body.rotationType;
   const newregion = req.body.region;
   const newlengthMinutes = req.body.lengthMinutes;
   const newvideoFormat = req.body.videoFormat;
 
+  // Crea un nuevo objeto del tipo LD (según la interfaz definida arriba)
   const newdisco: LD = {
-    id: newID,
-    filmName: newfilmName,
-    rotationType: newrotationType,
-    region: newregion,
-    lengthMinutes: newlengthMinutes,
-    videoFormat: newvideoFormat
+    id: newID,                     // id calculado automáticamente
+    filmName: newfilmName,         // nombre de la película
+    rotationType: newrotationType, // tipo de rotación (CAV o CLV)
+    region: newregion,             // región
+    lengthMinutes: newlengthMinutes, // duración en minutos
+    videoFormat: newvideoFormat    // formato de video (NTSC o PAL)
   };
 
+  // Validación básica: comprueba que los campos existan y sean del tipo correcto
   if (
-    newfilmName &&
-    newrotationType &&
+    newfilmName &&                 // que el nombre no esté vacío
+    newrotationType &&             // que exista tipo de rotación
     typeof newfilmName === "string" &&
     typeof newrotationType === "string" &&
     typeof newregion === "string" &&
     typeof newlengthMinutes === "number" &&
     typeof newvideoFormat === "string"
   ) {
+    // Si todo está correcto, agrega el nuevo disco al array 'ld' (nuestra "base de datos" simulada)
     ld.push(newdisco);
+
+    // Envía una respuesta HTTP con código 201 (Created) y el nuevo objeto en formato JSON
     res.status(201).json(newdisco);
+
   } else {
+    // Si falta algún dato o el tipo no es correcto, responde con código 400 (Bad Request)
     res.status(400).send("Solicitud incorrecta para la creación");
   }
 });
+
 ```
 - `ld.at(-1)` toma el último elemento del array (si existe). `?.` evita fallo si el array está vacío.
 - Calculas `newID` como último `id + 1`, o `0` si no hay datos.
